@@ -1,0 +1,15 @@
+# local Claude Code settings
+.claude/
+
+# logs and run artifacts
+*.log
+*.out
+bench-results*.txt
+
+# python / venv
+.venv/
+__pycache__/
+*.pyc
+
+# os
+.DS_Store

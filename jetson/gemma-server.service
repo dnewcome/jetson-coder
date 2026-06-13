@@ -1,0 +1,18 @@
+[Unit]
+Description=llama.cpp Gemma 4 26B-A4B server (single board: MTP + vision + jinja)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=george
+# Drop page cache as root so the ~16GB weight buffer can allocate (Tegra unified mem).
+ExecStartPre=+/bin/sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches'
+ExecStart=/mnt/nvme/zen/llm/run-server.sh
+Restart=on-failure
+RestartSec=10
+# Give the big model time to load before systemd considers it failed.
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target

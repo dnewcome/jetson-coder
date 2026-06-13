@@ -1,0 +1,28 @@
+{
+  "providers": {
+    "local-llama": {
+      "baseUrl": "http://192.168.68.62:8080/v1",
+      "api": "openai-completions",
+      "apiKey": "llamacpp",
+      "compat": { "supportsDeveloperRole": false },
+      "models": [
+        {
+          "id": "gemma4-local",
+          "name": "Gemma 4 26B-A4B (local, MTP+vision)",
+          "input": ["text", "image"],
+          "contextWindow": 32768,
+          "maxTokens": 8192,
+          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+        },
+        {
+          "id": "qwen36-local",
+          "name": "Qwen3.6 35B-A3B (local)",
+          "input": ["text"],
+          "contextWindow": 32768,
+          "maxTokens": 8192,
+          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+        }
+      ]
+    }
+  }
+}
