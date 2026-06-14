@@ -54,7 +54,9 @@ Confirmed: generation, the agentic tool loop (write/bash/edit), and vision all w
 - **`-fa on` is fine** (earlier "gibberish" was an unformatted prompt, not FlashAttention).
 - **`pkill -x llama-server`, not `pkill -f`** — `-f` matches any shell whose command line contains the
   string "llama-server" (including your own SSH command), killing the wrong process.
-- **Marginal PSU → brownout** under load (clean power-off, no panic). Use a strong supply.
+- **Power the boards adequately.** The stock supply is underpowered and the board can cut out
+  under load (clean power-off, no kernel panic — pure power, not thermal/OOM). Powering each board
+  over USB resolves it; then MAXN runs fine with no power cap.
 
 ## Usage
 ```bash
