@@ -59,6 +59,32 @@ Notes:
 - Build gotcha: **CUDA 12.4 needs GCC ≤13** — set `-DCMAKE_CUDA_HOST_COMPILER=/usr/bin/g++-13` (system GCC 15 ICEs on FlashAttention).
   Cap `cmake --build -j4` — unlimited `-j` OOMs during nvcc/FA compile.
 
+## Projected configs (ESTIMATES — not measured)
+
+Extrapolated from the measured 4070 SUPER + i9/DDR5 numbers. Generation is bandwidth-bound; the
+split is GPU-bandwidth (offloaded layers) + CPU-RAM-bandwidth (CPU-resident MoE experts).
+
+### RTX 3060 12 GB + 64 GB DDR4 + 8-core i7
+Same 12 GB VRAM as the 4070 → same offload tuning (`--n-cpu-moe 16` Gemma / `30` Qwen). 3060 is
+~0.71× the 4070's bandwidth (360 vs 504 GB/s) and DDR4 (~50 GB/s) is ~0.55× the DDR5 box's CPU bandwidth,
+so the CPU-resident experts are slower than in the measured runs.
+
+| Config | 4070+DDR5 (measured) | 3060 12GB + DDR4 (est.) |
+|---|---|---|
+| Gemma 4 + MTP | 57.7 | ~36–44 |
+| Gemma 4 baseline | 46.4 | ~30–36 |
+| Qwen3.6-35B | 55.3 | ~28–36 |
+| CPU-only Gemma | 15.1 | ~8–10 |
+| CPU-only Qwen | 12.9 | ~7–8 |
+
+- **Ranking flips vs DDR5:** on DDR4, Qwen drops more than Gemma (12 GB holds fewer of Qwen's larger
+  experts → more on slow DDR4), so **Gemma + MTP is the daily driver** (~36–44 tok/s, very usable).
+- **64 GB DDR4 is a capacity win, not bandwidth:** removes RAM limits (CPU Qwen w/o swap, both models
+  loaded, big context, room for larger models) but doesn't speed the CPU path.
+- **CPU-only ~halves** vs the DDR5 box (~7–10 tok/s) — fallback, not the main path.
+- Build: 3060 is Ampere → `-DCMAKE_CUDA_ARCHITECTURES=86`; same g++-13 / `-j4` caveats.
+- 3060 **8 GB** variant: more experts forced onto DDR4 → roughly ~25–32 (Gemma+MTP), Qwen tighter.
+
 ## Run log / observations
 - `-fa on` is fine on sm_72 (earlier "gibberish" was an **unformatted prompt**, not FlashAttention).
 - Model load needs **`--no-mmap`** + a page-cache drop, else the 16 GB weight buffer can't be allocated.
