@@ -59,6 +59,23 @@ Notes:
 - Build gotcha: **CUDA 12.4 needs GCC ≤13** — set `-DCMAKE_CUDA_HOST_COMPILER=/usr/bin/g++-13` (system GCC 15 ICEs on FlashAttention).
   Cap `cmake --build -j4` — unlimited `-j` OOMs during nvcc/FA compile.
 
+## Dense vs MoE on limited VRAM (measured) — the decisive result
+
+Qwen 3.6-27B **dense** (Q4_K_XL, 17.6GB) — the HN "quality" pick — same prompt/methodology:
+
+| Platform | gen t/s | vs Qwen 35B-A3B MoE |
+|---|---|---|
+| RTX 4070 12GB (-ngl 30, partial) | **4.9** | 55.3 → **11× slower** |
+| i9-14900K CPU-only | **2.8** | 12.9 |
+
+- **Why:** a dense model reads *all* 27B params every token, so the ~8GB stranded on CPU throttles
+  everything. MoE reads only ~3B active params/token → the CPU-resident part is small → partial offload
+  barely hurts. **Partial offload rescues MoE; it kills dense.**
+- **Consequence:** the dense quality model is **unusable on 12GB (~5 tok/s)**. It needs **full VRAM fit**.
+  On a 24GB card (e.g. RTX 3090) the 17.6GB model fits entirely → expect ~30–50 tok/s (HN: single 3090
+  ~70–80 for 27B dense). This is the **strongest case for the 24GB upgrade** — it's the only path to the
+  quality model at usable speed. On 12GB, stick with the MoE models.
+
 ## Target benchmarks — HN community ("local model for daily coding" thread)
 
 Reported gen tok/s for the **same models** (Gemma 4 26B-A4B / Qwen 3.6-35B-A3B, Q4-class), from
