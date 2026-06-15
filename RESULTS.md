@@ -59,6 +59,26 @@ Notes:
 - Build gotcha: **CUDA 12.4 needs GCC ≤13** — set `-DCMAKE_CUDA_HOST_COMPILER=/usr/bin/g++-13` (system GCC 15 ICEs on FlashAttention).
   Cap `cmake --build -j4` — unlimited `-j` OOMs during nvcc/FA compile.
 
+## Coding *quality* (benchmarks — speed ≠ ability)
+
+All numbers above are **speed**. Coding *ability* (community/blog benchmarks, April 2026 — recent models,
+varying harnesses, treat as directional):
+
+| Model | SWE-bench Verified | Coding rank | Notes |
+|---|---|---|---|
+| Qwen 3.6-27B **dense** | ~77% (≈ +4 vs MoE) | 🥇 best | gap widens on hard agentic/multi-step (~11pt Terminal-Bench) |
+| Qwen 3.6-35B-A3B **MoE** | 73.4% | 🥈 close | activates only ~3B/token (9 of 256 experts) |
+| Gemma 4 26B-A4B | 52.0% | 🥉 well behind | ~21pt behind Qwen; wins on vision + size only |
+
+Sources: [Qwen 35B-A3B vs Gemma 4](https://pub.towardsai.net/i-tested-alibaba-qwen3-6-35b-a3b-30cc4658a382),
+[27B dense vs 35B-A3B](https://www.aimadetools.com/blog/qwen-3-6-27b-vs-35b-a3b/),
+[Qwen3.6-27B official](https://qwen.ai/blog?id=qwen3.6-27b).
+
+**Quality × speed × 12GB hardware → daily driver = Qwen 3.6-35B-A3B MoE** (73% quality at 55 tok/s):
+nearly as fast as Gemma on the 4070 but a *far* better coder (73 vs 52). Gemma 4 only if you need vision/max speed.
+The dense 27B is the best coder but only ~4pt better than the MoE on SWE-bench (bigger on hard agentic work) —
+so the 24GB upgrade is justified by *quality* only if your work is the hard multi-step kind; otherwise the MoE suffices.
+
 ## Dense vs MoE on limited VRAM (measured) — the decisive result
 
 Qwen 3.6-27B **dense** (Q4_K_XL, 17.6GB) — the HN "quality" pick — same prompt/methodology:
