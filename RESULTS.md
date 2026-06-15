@@ -59,6 +59,39 @@ Notes:
 - Build gotcha: **CUDA 12.4 needs GCC ≤13** — set `-DCMAKE_CUDA_HOST_COMPILER=/usr/bin/g++-13` (system GCC 15 ICEs on FlashAttention).
   Cap `cmake --build -j4` — unlimited `-j` OOMs during nvcc/FA compile.
 
+## Target benchmarks — HN community ("local model for daily coding" thread)
+
+Reported gen tok/s for the **same models** (Gemma 4 26B-A4B / Qwen 3.6-35B-A3B, Q4-class), from
+[HN 48542100](https://news.ycombinator.com/item?id=48542100). Use these as targets. Our **measured**
+boxes are marked ◀; the single biggest determinant is **whether the model fits entirely in VRAM**.
+
+| Tier | gen t/s | Hardware | VRAM fit? | ~Cost |
+|---|---|---|---|---|
+| **S** | ~120–160 | Dual RTX 3090 (48GB), RTX Pro 6000 Blackwell | full | $1.4k–7k+ |
+| **A** | ~50–80 | Single RTX 3090/4090 (24GB), Strix Halo 128GB, M1/M4/M5 Max | full or near | $0.7k–4k |
+| **A** | **55** ◀ | **RTX 4070 SUPER 12GB (ours)** | partial (`--n-cpu-moe`) | (have it) |
+| **A** | **55–72** ◀ | **M1 Max 64GB (Kyle, ref)** | full | — |
+| **B** | ~20–30 | M4 Pro 48GB, low-bandwidth unified | full/slow | — |
+| **B** | **17–21** ◀ | **Jetson AGX Xavier (ours)** | full, 137 GB/s | — |
+| **C** | ~7–17 | CPU-only, old Xeons, Optane | n/a | — |
+| **C** | **13–15** ◀ | **i9-14900K CPU DDR5 (ours)** | n/a | (have it) |
+
+Community consensus worth weighing alongside speed:
+- **VRAM fit is the cliff:** full-fit 24GB+ cards hit ~120–150; our 12GB card is capped at ~55 purely by partial offload.
+- **Qwen 3.6-27B *dense* = best coding quality** (~3× slower than A3B MoE, but "the sweet spot"); A3B MoE is the speed pick.
+- Memory bandwidth (not compute) governs generation — confirms our cross-platform results.
+- `llama.cpp` over Ollama; `preserve_thinking`/cache-reuse to avoid reprocessing on thinking models.
+
+### Optimal setup for *this* hardware (i9-14900K + 4070 SUPER + Jetsons)
+- **Highest-leverage upgrade: a single 24GB GPU (used RTX 3090 ~$700–900).** It makes the 16–22GB models
+  fit **entirely in VRAM** → no CPU experts → realistically **~2.5–3× our current 55 → ~120–150 tok/s** (Tier S),
+  *and* unlocks **Qwen 3.6-27B dense** (the quality pick) at usable speed. Keep the i9-14900K.
+- **Bump RAM 30 → 64GB+** (cheap): removes the swap/context limits we hit running CPU-only Qwen.
+- **The 4070 SUPER is already solid** (ties the M1 Max) — if not upgrading, run **Gemma 4 + MTP** as the daily
+  driver (~58 tok/s) and reserve CPU-only as fallback.
+- **Jetsons:** not the speed play (17–21 tok/s); best as always-on low-power inference or the 2-board
+  experiment — not your main coding driver.
+
 ## Projected configs (ESTIMATES — not measured)
 
 Extrapolated from the measured 4070 SUPER + i9/DDR5 numbers. Generation is bandwidth-bound; the
