@@ -79,6 +79,30 @@ nearly as fast as Gemma on the 4070 but a *far* better coder (73 vs 52). Gemma 4
 The dense 27B is the best coder but only ~4pt better than the MoE on SWE-bench (bigger on hard agentic work) —
 so the 24GB upgrade is justified by *quality* only if your work is the hard multi-step kind; otherwise the MoE suffices.
 
+## Local coding benchmark — MEASURED (wartron/bench_llamacpp_jetson rubric)
+
+Ran the [bench_llamacpp_jetson](https://github.com/wartron/bench_llamacpp_jetson) 8-task coding
+suite on our three models on the **RTX 4070** (deterministic keyword rubric, passed/total markers).
+
+| Model | Rubric score | avg tok/s |
+|---|---|---|
+| Qwen 3.6-27B dense | **43/45 (95.6%)** | 5.0 |
+| Qwen 3.6-35B-A3B MoE | 42/45 (93.3%) | 49.8 |
+| Gemma 4 26B-A4B | 42/45 (93.3%) | 46.9 |
+
+Per-task: all three differ on only **1–2 markers total** (full marks on lru_cache, rust iterator,
+regex parser, edit-distance, refactor). They're near-ceiling and effectively **tied**, dense by a hair.
+
+**Two findings:**
+- **This rubric saturates.** Easy tasks + substring matching can't resolve real quality gaps — note this
+  contradicts the SWE-bench spread (Qwen 73 vs Gemma 52 above). Routine code: all three are excellent and
+  indistinguishable; the differences only show up on hard, execution-verified benchmarks.
+- **Thinking models need a big token budget** (methodology trap): a first run at `max_tokens=3072` with
+  thinking ON gave *inverted, bogus* scores — the models burned the whole budget on hidden
+  `reasoning_content` and emitted no answer (dense hit the cap 7/8, left 6/8 empty → falsely "worst").
+  Fix: disable thinking (`chat_template_kwargs.enable_thinking=false`) for the rubric. With thinking ON the
+  dense model would need ~8k tokens/task → **~3.5 h** at 5 tok/s — impractical to measure on this hardware.
+
 ## Dense vs MoE on limited VRAM (measured) — the decisive result
 
 Qwen 3.6-27B **dense** (Q4_K_XL, 17.6GB) — the HN "quality" pick — same prompt/methodology:
