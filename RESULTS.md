@@ -103,6 +103,44 @@ regex parser, edit-distance, refactor). They're near-ceiling and effectively **t
   Fix: disable thinking (`chat_template_kwargs.enable_thinking=false`) for the rubric. With thinking ON the
   dense model would need ~8k tokens/task → **~3.5 h** at 5 tok/s — impractical to measure on this hardware.
 
+## Tool-calling reliability — MEASURED (the axis the rubric doesn't test)
+
+The HN threads' recurring complaint about local models isn't answer quality — it's that **MoE models
+fire tools inconsistently** (wrong function, malformed JSON args, or no call at all), which breaks
+agent loops like Pi. Our coding rubric scores *answer content*, not tool use, so it can't see this.
+So we probed it directly (`scripts/toolcall_bench.sh` + `toolcall_test.py`): OpenAI-style `tools`
+array, `tool_choice:auto`, `--jinja`, temp 0. Five cases test the three failure modes — calls when it
+should, picks the right tool with valid+correct JSON args, and **abstains** on chit-chat (over-eager
+calling = fail).
+
+| Model | Tool-calling | Notes |
+|---|---|---|
+| Gemma 4 26B-A4B (Q4_K_XL) | **5/5** | correct tool, valid args, abstained on chat |
+| Qwen 3.6-35B-A3B MoE (Q4_K_M) | **5/5** | same |
+| Qwen 3.6-27B dense (Q4_K_XL) | **5/5** | same |
+
+**Findings:**
+- **Single-turn tool-calling is solid at Q4** across all three with Unsloth UD quants + `--jinja`. The
+  MoE models did *not* show the HN-reported flakiness here. `--jinja` (the model's real chat template)
+  is what makes this work — without it you get empty/garbled tool fields.
+- **This probe saturates too.** It tests single-turn selection/args. The HN failures live in *sustained
+  multi-step agent loops* (10+ turns, parallel calls, long tool-result context) and under **KV-cache
+  quantization**, which the thread specifically calls out as further weakening tool-calling. We did not
+  stress those — treat 5/5 as "the basics are reliable," not "agentic loops are bulletproof."
+- **Hardware-independent:** tool-calling correctness is a function of (GGUF + template + sampling), not
+  the GPU. At temp 0 the same model emits the same tokens on the Jetson and the 4070, so this was run
+  once on the workstation; the verdict carries to the Jetson with the same GGUFs. Only speed differs.
+
+### Quantization is a real quality lever (HN consensus, not measured here)
+We benchmarked Q4-class quants because they fit 12 GB. The threads' quality guidance, worth weighing:
+- **Prefer Q8/Q6 for MoE** over aggressive 4-bit when VRAM allows — 4-bit measurably erodes capability.
+  Our Q4 results are the *floor*; a 24 GB card running Q6/Q8 would be better, not just faster.
+- **Unsloth (UD) quants** are preferred specifically for tool-calling reliability — which is what we run.
+- **Don't KV-cache-quantize if you care about tool use** — it further degrades tool-calling. On 12 GB
+  it's tempting to quantize KV to buy context; the trade hurts agent reliability.
+- **Gemma-4 26B QAT** (quantization-aware-trained) gives near-Q8 quality at 4-bit size — a better Gemma
+  quant than plain Q4_K_XL if you can source it.
+
 ## Dense vs MoE on limited VRAM (measured) — the decisive result
 
 Qwen 3.6-27B **dense** (Q4_K_XL, 17.6GB) — the HN "quality" pick — same prompt/methodology:
@@ -123,7 +161,8 @@ Qwen 3.6-27B **dense** (Q4_K_XL, 17.6GB) — the HN "quality" pick — same prom
 ## Target benchmarks — HN community ("local model for daily coding" thread)
 
 Reported gen tok/s for the **same models** (Gemma 4 26B-A4B / Qwen 3.6-35B-A3B, Q4-class), from
-[HN 48542100](https://news.ycombinator.com/item?id=48542100). Use these as targets. Our **measured**
+[HN 48542100](https://news.ycombinator.com/item?id=48542100) and the follow-up
+[HN 48555993](https://news.ycombinator.com/item?id=48555993). Use these as targets. Our **measured**
 boxes are marked ◀; the single biggest determinant is **whether the model fits entirely in VRAM**.
 
 | Tier | gen t/s | Hardware | VRAM fit? | ~Cost |
@@ -142,6 +181,11 @@ Community consensus worth weighing alongside speed:
 - **Qwen 3.6-27B *dense* = best coding quality** (~3× slower than A3B MoE, but "the sweet spot"); A3B MoE is the speed pick.
 - Memory bandwidth (not compute) governs generation — confirms our cross-platform results.
 - `llama.cpp` over Ollama; `preserve_thinking`/cache-reuse to avoid reprocessing on thinking models.
+- **Tool-calling, not answer quality, is the real MoE weak spot** for agent use — but it held up at Q4
+  in our probe (5/5 all models); see the tool-calling section. Prefer Q8/Q6 + Unsloth quants, avoid
+  KV-cache quantization, if you push past single-turn calls.
+- **ngram speculative decoding** (`--draft`-style, no draft model needed) is a free alternative to MTP
+  worth trying on hardware without an MTP draft GGUF — likely weaker than MTP for code, but zero setup.
 
 ### Optimal setup for *this* hardware (i9-14900K + 4070 SUPER + Jetsons)
 - **Highest-leverage upgrade: a single 24GB GPU (used RTX 3090 ~$700–900).** It makes the 16–22GB models
