@@ -223,6 +223,43 @@ so the CPU-resident experts are slower than in the measured runs.
 - Build: 3060 is Ampere → `-DCMAKE_CUDA_ARCHITECTURES=86`; same g++-13 / `-j4` caveats.
 - 3060 **8 GB** variant: more experts forced onto DDR4 → roughly ~25–32 (Gemma+MTP), Qwen tighter.
 
+## TODO — pending benchmarks
+
+### Ornith-1.0 (DeepReinforce) — agentic coding fine-tune of Qwen3.5 / Gemma 4
+MIT-licensed, RL-trained for tool calling + agentic loops. Claims SOTA on Terminal-Bench 2.1
+(Claude Code harness) for its size class — and the 9B already has official GGUFs that fit a
+single Jetson with room for a 256k context.
+
+| Variant | Q4_K_M | Fits |
+|---|---|---|
+| Ornith-1.0-9B (dense, Qwen3.5 base) | 5.6 GB | single Jetson, huge cache headroom |
+| Ornith-1.0-35B (MoE, qwen35moe) | 21.2 GB | single Jetson (tight), 2-board comfortably |
+| Ornith-1.0-397B (MoE) | ~220 GB+ | not on this cluster |
+
+Reported benchmarks for the 9B: **40.6 Terminal-Bench (Claude Code), 69.4 SWE-bench Verified, 27.2 NL2Repo.**
+Worth a head-to-head against the current Gemma 4 + MTP daily driver — different design point
+(dense vs MoE+MTP) so the tok/s comparison isn't apples-to-apples, but the agentic-loop quality is the thing to measure.
+
+Drop-in launch (mirrors `scripts/run-server.sh` structure):
+```bash
+./llama-server \
+  -hf deepreinforce-ai/Ornith-1.0-9B-GGUF \
+  -dev CUDA0 -ngl 99 \
+  --parallel 1 -c 131072 \
+  -ctk q4_0 -ctv q4_0 \
+  --cache-ram 14336 \
+  --jinja \
+  --host 0.0.0.0 --port 8080
+```
+
+What to measure:
+- Generation tok/s on Xavier (Volta sm_72) at CTX=65536 — direct compare to Gemma 4 baseline (16.6) and Gemma 4 + MTP (20.6).
+- Agentic-loop reliability vs the wartron rubric (same harness as the prior Pi runs).
+- 35B MoE on a single 32 GB board with prompt cache trimmed — does it fit and stay interactive?
+- Whether `--jinja` parses Ornith's tool-call format correctly without a custom template (Qwen3.5 base → should be fine).
+
+Source: <https://github.com/deepreinforce-ai/Ornith-1>
+
 ## Run log / observations
 - `-fa on` is fine on sm_72 (earlier "gibberish" was an **unformatted prompt**, not FlashAttention).
 - Model load needs **`--no-mmap`** + a page-cache drop, else the 16 GB weight buffer can't be allocated.
